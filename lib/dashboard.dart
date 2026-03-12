@@ -8,6 +8,7 @@ import 'alertas_page.dart';
 import 'alertas_service.dart';
 import 'animated_card.dart';
 import 'configuracion_page.dart';
+import 'pdf_export.dart';
 
 // ─── PALETA ──────────────────────────────────────────────────────────────────
 const _white      = Color(0xFFFFFFFF);
@@ -16,7 +17,6 @@ const _card       = Color(0xFFFFFFFF);
 const _textMain   = Color(0xFF0F1117);
 const _textSub    = Color(0xFF8A8FA8);
 const _divider    = Color(0xFFEAEBF0);
-
 const _blue       = Color(0xFF3B7BFF);
 const _blueSoft   = Color(0x1A3B7BFF);
 const _green      = Color(0xFF00C48C);
@@ -46,7 +46,7 @@ class _DashboardState extends State<Dashboard>
     super.initState();
     _ac = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1000),
+      duration: const Duration(milliseconds: 1100),
     )..forward();
     DatabaseHelper.instance.database;
   }
@@ -57,11 +57,12 @@ class _DashboardState extends State<Dashboard>
     super.dispose();
   }
 
+  /// Animación escalonada por índice
   Animation<double> _anim(int i) => CurvedAnimation(
         parent: _ac,
         curve: Interval(
-          i * 0.1,
-          (i * 0.1) + 0.6,
+          i * 0.08,
+          (i * 0.08) + 0.55,
           curve: Curves.easeOutCubic,
         ),
       );
@@ -75,7 +76,7 @@ class _DashboardState extends State<Dashboard>
         physics: const BouncingScrollPhysics(),
         slivers: [
 
-          // ── APP BAR CON IMAGEN ─────────────────────────────────────────────
+          // ── HEADER CON IMAGEN ──────────────────────────────────────────
           SliverAppBar(
             expandedHeight: 230,
             pinned: true,
@@ -94,7 +95,7 @@ class _DashboardState extends State<Dashboard>
             ),
             centerTitle: false,
 
-            // ── BOTÓN DE ALERTAS (campana con badge) ───────────────────────
+            // ── CAMPANA DE ALERTAS ─────────────────────────────────────
             actions: [
               FutureBuilder<List<Alerta>>(
                 future: AlertasService.instance.obtenerAlertas(),
@@ -107,7 +108,7 @@ class _DashboardState extends State<Dashboard>
 
                   return Padding(
                     padding: const EdgeInsets.only(right: 12),
-                    child: GestureDetector(
+                    child: AnimatedCard(
                       onTap: () => Navigator.push(
                         context,
                         _slide(const AlertasPage()),
@@ -174,7 +175,7 @@ class _DashboardState extends State<Dashboard>
                   // Imagen del carro
                   Image.asset('assets/sentra.png', fit: BoxFit.cover),
 
-                  // Gradiente blanco hacia abajo
+                  // Gradiente hacia blanco
                   Container(
                     decoration: const BoxDecoration(
                       gradient: LinearGradient(
@@ -243,7 +244,8 @@ class _DashboardState extends State<Dashboard>
                       child: const Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.circle, color: Colors.white, size: 7),
+                          Icon(Icons.circle,
+                              color: Colors.white, size: 7),
                           SizedBox(width: 6),
                           Text(
                             "Activo",
@@ -262,108 +264,72 @@ class _DashboardState extends State<Dashboard>
             ),
           ),
 
-          // ── CONTENIDO PRINCIPAL ────────────────────────────────────────────
+          // ── BODY ────────────────────────────────────────────────────────
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(16, 20, 16, 40),
             sliver: SliverList(
               delegate: SliverChildListDelegate([
 
-                // ── 1. RESUMEN DE ALERTAS ────────────────────────────────────
-                FadeTransition(
-                  opacity: _anim(0),
-                  child: SlideTransition(
-                    position: Tween<Offset>(
-                      begin: const Offset(0, 0.15),
-                      end: Offset.zero,
-                    ).animate(_anim(0)),
-                    child: FutureBuilder<List<Alerta>>(
-                      future: AlertasService.instance.obtenerAlertas(),
-                      builder: (ctx, snap) {
-                        if (!snap.hasData) return const SizedBox.shrink();
-                        final alertas = snap.data!;
-                        return alertas.isEmpty
-                            ? _cardTodoOk()
-                            : _cardAlertasResumen(alertas);
-                      },
-                    ),
-                  ),
-                ),
+                // ── 0. RESUMEN DE ALERTAS ──────────────────────────────
+                _animado(0, FutureBuilder<List<Alerta>>(
+                  future: AlertasService.instance.obtenerAlertas(),
+                  builder: (ctx, snap) {
+                    if (!snap.hasData) return const SizedBox.shrink();
+                    final alertas = snap.data!;
+                    return alertas.isEmpty
+                        ? _cardTodoOk()
+                        : _cardAlertasResumen(alertas);
+                  },
+                )),
 
                 const SizedBox(height: 16),
 
-                // ── 2. GRÁFICA DE RENDIMIENTO ────────────────────────────────
-                FadeTransition(
-                  opacity: _anim(1),
-                  child: SlideTransition(
-                    position: Tween<Offset>(
-                      begin: const Offset(0, 0.15),
-                      end: Offset.zero,
-                    ).animate(_anim(1)),
-                    child: FutureBuilder<List<Map<String, dynamic>>>(
-                      future: _obtenerConsumos(),
-                      builder: (context, snap) {
-                        if (snap.connectionState == ConnectionState.waiting) {
-                          return _cardSkeleton(height: 210);
-                        }
-                        if (!snap.hasData || snap.data!.length < 2) {
-                          return _cardSinDatos();
-                        }
-                        return _cardRendimiento(snap.data!);
-                      },
-                    ),
-                  ),
-                ),
+                // ── 1. GRÁFICA DE RENDIMIENTO ──────────────────────────
+                _animado(1, FutureBuilder<List<Map<String, dynamic>>>(
+                  future: _obtenerConsumos(),
+                  builder: (context, snap) {
+                    if (snap.connectionState == ConnectionState.waiting) {
+                      return _cardSkeleton(height: 210);
+                    }
+                    if (!snap.hasData || snap.data!.length < 2) {
+                      return _cardSinDatos();
+                    }
+                    return _cardRendimiento(snap.data!);
+                  },
+                )),
 
                 const SizedBox(height: 20),
                 _sectionLabel("ACCIONES RÁPIDAS"),
                 const SizedBox(height: 10),
 
-                // ── 3. GASOLINA ───────────────────────────────────────────────
-                FadeTransition(
-                  opacity: _anim(2),
-                  child: SlideTransition(
-                    position: Tween<Offset>(
-                      begin: const Offset(0, 0.15),
-                      end: Offset.zero,
-                    ).animate(_anim(2)),
-                    child: _cardAccion(
-                      title: "Gasolina",
-                      subtitle: "Tap para registrar  ·  Mantén para historial",
-                      icon: Icons.local_gas_station_rounded,
-                      color: _blue,
-                      softColor: _blueSoft,
-                      onTap: () => Navigator.push(
-                          context, _slide(const GasolinaPage())),
-                      onLongPress: () => Navigator.push(
-                          context, _slide(const HistorialGasolina())),
-                    ),
-                  ),
-                ),
+                // ── 2. GASOLINA ────────────────────────────────────────
+                _animado(2, _cardAccion(
+                  title:     "Gasolina",
+                  subtitle:  "Tap para registrar  ·  Mantén para historial",
+                  icon:      Icons.local_gas_station_rounded,
+                  color:     _blue,
+                  softColor: _blueSoft,
+                  onTap:      () => Navigator.push(
+                      context, _slide(const GasolinaPage())),
+                  onLongPress: () => Navigator.push(
+                      context, _slide(const HistorialGasolina())),
+                )),
                 const SizedBox(height: 10),
 
-                // ── 4. SERVICIOS ──────────────────────────────────────────────
-                FadeTransition(
-                  opacity: _anim(3),
-                  child: SlideTransition(
-                    position: Tween<Offset>(
-                      begin: const Offset(0, 0.15),
-                      end: Offset.zero,
-                    ).animate(_anim(3)),
-                    child: _cardAccion(
-                      title: "Servicios",
-                      subtitle: "Aceite  ·  Bujías  ·  Filtros  ·  Revisiones",
-                      icon: Icons.settings_rounded,
-                      color: _orange,
-                      softColor: _orangeSoft,
-                      onTap: () => Navigator.push(
-                          context, _slide(const ServiciosPage())),
-                    ),
-                  ),
-                ),
+                // ── 3. SERVICIOS ───────────────────────────────────────
+                _animado(3, _cardAccion(
+                  title:     "Servicios",
+                  subtitle:  "Aceite  ·  Bujías  ·  Filtros  ·  Revisiones",
+                  icon:      Icons.build_rounded,
+                  color:     _orange,
+                  softColor: _orangeSoft,
+                  onTap: () => Navigator.push(
+                      context, _slide(const ServiciosPage())),
+                )),
                 const SizedBox(height: 10),
 
-                // ── 5. SEGURO ─────────────────────────────────────────────────
-                FutureBuilder<Map<String, dynamic>?>(
+                // ── 4. SEGURO ──────────────────────────────────────────
+                _animado(4, FutureBuilder<Map<String, dynamic>?>(
                   future: DatabaseHelper.instance.obtenerSeguro(),
                   builder: (context, snap) {
                     String subtitle = "Sin registrar";
@@ -380,62 +346,70 @@ class _DashboardState extends State<Dashboard>
                           "${s['aseguradora']}  ·  Vence ${fin.day}/${fin.month}/${fin.year}";
                     }
 
-                    final color     = vencido
+                    final color = vencido
                         ? _red
                         : (proxVencer ? _orange : _green);
-                    final softColor = vencido
+                    final soft  = vencido
                         ? _redSoft
                         : (proxVencer ? _orangeSoft : _greenSoft);
 
-                    return FadeTransition(
-                      opacity: _anim(4),
-                      child: SlideTransition(
-                        position: Tween<Offset>(
-                          begin: const Offset(0, 0.15),
-                          end: Offset.zero,
-                        ).animate(_anim(4)),
-                        child: _cardAccion(
-                          title: "Seguro",
-                          subtitle: subtitle,
-                          icon: Icons.verified_user_rounded,
-                          color: color,
-                          softColor: softColor,
-                          badge: vencido
-                              ? "VENCIDO"
-                              : (proxVencer ? "POR VENCER" : null),
-                          badgeColor: vencido ? _red : _orange,
-                          onTap: () => Navigator.push(
-                            context,
-                            _slide(const SeguroPage()),
-                          ).then((_) => setState(() {})),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-                const SizedBox(height: 10),
-
-                // ── 6. ALERTAS ────────────────────────────────────────────────
-                FadeTransition(
-                  opacity: _anim(5),
-                  child: SlideTransition(
-                    position: Tween<Offset>(
-                      begin: const Offset(0, 0.15),
-                      end: Offset.zero,
-                    ).animate(_anim(5)),
-                    child: _cardAccion(
-                      title: "Alertas",
-                      subtitle: "Servicios, seguro y gasolina",
-                      icon: Icons.notifications_rounded,
-                      color: _purple,
-                      softColor: _purpleSoft,
+                    return _cardAccion(
+                      title:      "Seguro",
+                      subtitle:   subtitle,
+                      icon:       Icons.verified_user_rounded,
+                      color:      color,
+                      softColor:  soft,
+                      badge:      vencido ? "VENCIDO"
+                          : (proxVencer ? "POR VENCER" : null),
+                      badgeColor: vencido ? _red : _orange,
                       onTap: () => Navigator.push(
                         context,
-                        _slide(const AlertasPage()),
+                        _slide(const SeguroPage()),
                       ).then((_) => setState(() {})),
-                    ),
-                  ),
-                ),
+                    );
+                  },
+                )),
+                const SizedBox(height: 10),
+
+                // ── 5. ALERTAS ─────────────────────────────────────────
+                _animado(5, _cardAccion(
+                  title:     "Alertas",
+                  subtitle:  "Servicios, seguro y gasolina",
+                  icon:      Icons.notifications_rounded,
+                  color:     _purple,
+                  softColor: _purpleSoft,
+                  onTap: () => Navigator.push(
+                    context, _slide(const AlertasPage()),
+                  ).then((_) => setState(() {})),
+                )),
+                const SizedBox(height: 20),
+
+                _sectionLabel("HERRAMIENTAS"),
+                const SizedBox(height: 10),
+
+                // ── 6. EXPORTAR PDF ────────────────────────────────────
+                _animado(6, _cardAccion(
+                  title:     "Exportar PDF",
+                  subtitle:  "Genera la bitácora completa de tu Sentra",
+                  icon:      Icons.picture_as_pdf_rounded,
+                  color:     _red,
+                  softColor: _redSoft,
+                  onTap: () => Navigator.push(
+                      context, _slide(const ExportarPdfPage())),
+                )),
+                const SizedBox(height: 10),
+
+                // ── 7. CONFIGURACIÓN ───────────────────────────────────
+                _animado(7, _cardAccion(
+                  title:     "Configuración",
+                  subtitle:  "Vehículo, intervalos y preferencias",
+                  icon:      Icons.settings_rounded,
+                  color:     _textSub,
+                  softColor: const Color(0x1A8A8FA8),
+                  onTap: () => Navigator.push(
+                    context, _slide(const ConfiguracionPage()),
+                  ).then((_) => setState(() {})),
+                )),
               ]),
             ),
           ),
@@ -444,19 +418,32 @@ class _DashboardState extends State<Dashboard>
     );
   }
 
-  // ─── CARD: RESUMEN DE ALERTAS ─────────────────────────────────────────────
-  Widget _cardAlertasResumen(List<Alerta> alertas) {
-    final criticas     = alertas.where((a) => a.nivel == AlertaNivel.critica).toList();
-    final hayCritica   = criticas.isNotEmpty;
-    final color        = hayCritica ? _red : _orange;
-    final softColor    = hayCritica ? _redSoft : _orangeSoft;
-    final preview      = alertas.take(2).toList();
+  // ─── ENVUELVE UN WIDGET CON ANIMACIÓN ESCALONADA ──────────────────────────
+  Widget _animado(int i, Widget child) => FadeTransition(
+        opacity: _anim(i),
+        child: SlideTransition(
+          position: Tween<Offset>(
+            begin: const Offset(0, 0.15),
+            end: Offset.zero,
+          ).animate(_anim(i)),
+          child: child,
+        ),
+      );
 
-    return GestureDetector(
+  // ─── CARD RESUMEN DE ALERTAS ──────────────────────────────────────────────
+  Widget _cardAlertasResumen(List<Alerta> alertas) {
+    final criticas   = alertas
+        .where((a) => a.nivel == AlertaNivel.critica)
+        .toList();
+    final hayCritica = criticas.isNotEmpty;
+    final color      = hayCritica ? _red : _orange;
+    final softColor  = hayCritica ? _redSoft : _orangeSoft;
+    final preview    = alertas.take(2).toList();
+
+    return AnimatedCard(
       onTap: () => Navigator.push(context, _slide(const AlertasPage()))
           .then((_) => setState(() {})),
       child: Container(
-        margin: const EdgeInsets.only(bottom: 0),
         decoration: BoxDecoration(
           color: _card,
           borderRadius: BorderRadius.circular(20),
@@ -473,7 +460,6 @@ class _DashboardState extends State<Dashboard>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header
             Row(
               children: [
                 Container(
@@ -503,23 +489,20 @@ class _DashboardState extends State<Dashboard>
                       ),
                       Text(
                         "${alertas.length} alerta${alertas.length != 1 ? 's' : ''} en total",
-                        style: const TextStyle(color: _textSub, fontSize: 12),
+                        style: const TextStyle(
+                            color: _textSub, fontSize: 12),
                       ),
                     ],
                   ),
                 ),
-                Row(
-                  children: [
-                    const Text("Ver todas",
-                        style: TextStyle(color: _textSub, fontSize: 12)),
-                    Icon(Icons.chevron_right_rounded,
-                        color: _textSub.withOpacity(0.5), size: 18),
-                  ],
-                ),
+                Row(children: [
+                  const Text("Ver todas",
+                      style: TextStyle(color: _textSub, fontSize: 12)),
+                  Icon(Icons.chevron_right_rounded,
+                      color: _textSub.withOpacity(0.5), size: 18),
+                ]),
               ],
             ),
-
-            // Preview de las 2 primeras alertas
             if (preview.isNotEmpty) ...[
               const SizedBox(height: 10),
               Container(height: 1, color: _divider),
@@ -532,30 +515,26 @@ class _DashboardState extends State<Dashboard>
                 };
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 5),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 6,
-                        height: 6,
-                        decoration: BoxDecoration(
-                          color: dotColor,
-                          shape: BoxShape.circle,
+                  child: Row(children: [
+                    Container(
+                      width: 6,
+                      height: 6,
+                      decoration: BoxDecoration(
+                          color: dotColor, shape: BoxShape.circle),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        a.titulo,
+                        style: const TextStyle(
+                          color: _textMain,
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
                         ),
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          a.titulo,
-                          style: const TextStyle(
-                            color: _textMain,
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.w600,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
+                    ),
+                  ]),
                 );
               }),
             ],
@@ -565,7 +544,7 @@ class _DashboardState extends State<Dashboard>
     );
   }
 
-  // ─── CARD: TODO OK ────────────────────────────────────────────────────────
+  // ─── CARD TODO OK ─────────────────────────────────────────────────────────
   Widget _cardTodoOk() => Container(
         decoration: BoxDecoration(
           color: _greenSoft,
@@ -573,40 +552,34 @@ class _DashboardState extends State<Dashboard>
           border: Border.all(color: _green.withOpacity(0.25)),
         ),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        child: Row(
-          children: [
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: _green.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(11),
-              ),
-              child: const Icon(Icons.check_circle_rounded,
-                  color: _green, size: 20),
+        child: Row(children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: _green.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(11),
             ),
-            const SizedBox(width: 12),
-            const Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  "Todo en orden",
+            child: const Icon(Icons.check_circle_rounded,
+                color: _green, size: 20),
+          ),
+          const SizedBox(width: 12),
+          const Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text("Todo en orden",
                   style: TextStyle(
                       color: _green,
                       fontSize: 14,
-                      fontWeight: FontWeight.w800),
-                ),
-                Text(
-                  "Sin alertas pendientes",
-                  style: TextStyle(color: _green, fontSize: 12),
-                ),
-              ],
-            ),
-          ],
-        ),
+                      fontWeight: FontWeight.w800)),
+              Text("Sin alertas pendientes",
+                  style: TextStyle(color: _green, fontSize: 12)),
+            ],
+          ),
+        ]),
       );
 
-  // ─── CARD: RENDIMIENTO KM/L ───────────────────────────────────────────────
+  // ─── CARD RENDIMIENTO ─────────────────────────────────────────────────────
   Widget _cardRendimiento(List<Map<String, dynamic>> registros) {
     final List<_Punto> puntos = [];
 
@@ -628,7 +601,7 @@ class _DashboardState extends State<Dashboard>
 
     if (puntos.isEmpty) return _cardSinDatos();
 
-    final ultimos     = puntos.length > 6
+    final ultimos = puntos.length > 6
         ? puntos.sublist(puntos.length - 6)
         : puntos;
     final ultimo      = ultimos.last.rendimiento;
@@ -659,7 +632,6 @@ class _DashboardState extends State<Dashboard>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Número grande + badge eficiencia
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -735,24 +707,16 @@ class _DashboardState extends State<Dashboard>
               ),
             ],
           ),
-
           const SizedBox(height: 6),
-
-          // Mini stats: prom / min / max
-          Row(
-            children: [
-              _miniStat("Prom.",
-                  "${promedio.toStringAsFixed(1)} km/L", _textSub),
-              const SizedBox(width: 16),
-              _miniStat("Mín", "${minV.toStringAsFixed(1)}", _red),
-              const SizedBox(width: 16),
-              _miniStat("Máx", "${maxV.toStringAsFixed(1)}", _green),
-            ],
-          ),
-
+          Row(children: [
+            _miniStat("Prom.",
+                "${promedio.toStringAsFixed(1)} km/L", _textSub),
+            const SizedBox(width: 16),
+            _miniStat("Mín", "${minV.toStringAsFixed(1)}", _red),
+            const SizedBox(width: 16),
+            _miniStat("Máx", "${maxV.toStringAsFixed(1)}", _green),
+          ]),
           const SizedBox(height: 18),
-
-          // Gráfica de línea animada
           SizedBox(
             height: 110,
             child: _GraficaLinea(
@@ -777,6 +741,106 @@ class _DashboardState extends State<Dashboard>
                   fontWeight: FontWeight.w700)),
         ],
       );
+
+  // ─── CARD ACCIÓN (con AnimatedCard integrado) ─────────────────────────────
+  Widget _cardAccion({
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required Color color,
+    required Color softColor,
+    String? badge,
+    Color? badgeColor,
+    VoidCallback? onTap,
+    VoidCallback? onLongPress,
+  }) {
+    return AnimatedCard(
+      onTap: onTap,
+      onLongPress: onLongPress,
+      child: Container(
+        decoration: BoxDecoration(
+          color: _card,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 12,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Row(
+          children: [
+            // Ícono
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: softColor,
+                borderRadius: BorderRadius.circular(15),
+              ),
+              child: Icon(icon, color: color, size: 24),
+            ),
+            const SizedBox(width: 14),
+
+            // Texto
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        color: _textMain,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    if (badge != null) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color:
+                              (badgeColor ?? _red).withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          badge,
+                          style: TextStyle(
+                            color: badgeColor ?? _red,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.3,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ]),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                        color: _textSub, fontSize: 12.5),
+                  ),
+                ],
+              ),
+            ),
+
+            // Chevron
+            Icon(
+              Icons.chevron_right_rounded,
+              color: _textSub.withOpacity(0.5),
+              size: 22,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   // ─── HELPERS ──────────────────────────────────────────────────────────────
   Future<List<Map<String, dynamic>>> _obtenerConsumos() async {
@@ -844,114 +908,14 @@ class _DashboardState extends State<Dashboard>
         ),
       );
 
-  Widget _cardAccion({
-    required String title,
-    required String subtitle,
-    required IconData icon,
-    required Color color,
-    required Color softColor,
-    String? badge,
-    Color? badgeColor,
-    VoidCallback? onTap,
-    VoidCallback? onLongPress,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      onLongPress: onLongPress,
-      child: Container(
-        decoration: BoxDecoration(
-          color: _card,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.04),
-              blurRadius: 12,
-              offset: const Offset(0, 3),
-            ),
-          ],
-        ),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        child: Row(
-          children: [
-            // Ícono con fondo suave
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: softColor,
-                borderRadius: BorderRadius.circular(15),
-              ),
-              child: Icon(icon, color: color, size: 24),
-            ),
-            const SizedBox(width: 14),
-
-            // Texto
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Text(
-                        title,
-                        style: const TextStyle(
-                          color: _textMain,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      if (badge != null) ...[
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: (badgeColor ?? _red).withOpacity(0.12),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            badge,
-                            style: TextStyle(
-                              color: badgeColor ?? _red,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: 0.3,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    style: const TextStyle(
-                        color: _textSub, fontSize: 12.5),
-                  ),
-                ],
-              ),
-            ),
-
-            // Chevron
-            Icon(
-              Icons.chevron_right_rounded,
-              color: _textSub.withOpacity(0.5),
-              size: 22,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   PageRoute _slide(Widget page) => PageRouteBuilder(
         pageBuilder: (_, a, __) => page,
         transitionsBuilder: (_, anim, __, child) => SlideTransition(
           position: Tween<Offset>(
             begin: const Offset(1, 0),
             end: Offset.zero,
-          ).animate(
-              CurvedAnimation(parent: anim, curve: Curves.easeOutCubic)),
+          ).animate(CurvedAnimation(
+              parent: anim, curve: Curves.easeOutCubic)),
           child: child,
         ),
         transitionDuration: const Duration(milliseconds: 320),
@@ -965,7 +929,7 @@ class _Punto {
   const _Punto({required this.rendimiento, required this.label});
 }
 
-// ─── WIDGET GRÁFICA ───────────────────────────────────────────────────────────
+// ─── GRÁFICA ANIMADA ──────────────────────────────────────────────────────────
 class _GraficaLinea extends StatefulWidget {
   final List<_Punto> puntos;
   final Color accentColor;
@@ -990,9 +954,9 @@ class _GraficaLineaState extends State<_GraficaLinea>
   void initState() {
     super.initState();
     _ac = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1200),
-    )..forward();
+        vsync: this,
+        duration: const Duration(milliseconds: 1200))
+      ..forward();
     _prog = CurvedAnimation(parent: _ac, curve: Curves.easeOutCubic);
   }
 
@@ -1024,10 +988,10 @@ class _LineaPainter extends CustomPainter {
   final double promedio;
   final Color accentColor;
 
-  static const Color _textSub = Color(0xFF8A8FA8);
-  static const Color _green   = Color(0xFF00C48C);
-  static const Color _orange  = Color(0xFFFF7A2F);
-  static const Color _white   = Color(0xFFFFFFFF);
+  static const _textSub = Color(0xFF8A8FA8);
+  static const _green   = Color(0xFF00C48C);
+  static const _orange  = Color(0xFFFF7A2F);
+  static const _white   = Color(0xFFFFFFFF);
 
   _LineaPainter({
     required this.puntos,
@@ -1045,12 +1009,10 @@ class _LineaPainter extends CustomPainter {
     final minV    = valores.reduce((a, b) => a < b ? a : b);
     final padding = (maxV - minV) * 0.25 + 0.5;
     final vMin    = minV - padding;
-    final vMax    = maxV + padding;
-    final rango   = (vMax - vMin).clamp(0.01, double.infinity);
-
-    final chartH = size.height - 18.0;
-    final n      = puntos.length;
-    final stepX  = size.width / (n - 1);
+    final rango   = (maxV + padding - vMin).clamp(0.01, double.infinity);
+    final chartH  = size.height - 18.0;
+    final n       = puntos.length;
+    final stepX   = size.width / (n - 1);
 
     Offset toOffset(int i) => Offset(
           i * stepX,
@@ -1059,7 +1021,7 @@ class _LineaPainter extends CustomPainter {
 
     final pts = List.generate(n, toOffset);
 
-    // Línea punteada del promedio
+    // Línea punteada promedio
     final yProm    = chartH - ((promedio - vMin) / rango) * chartH;
     final dashPaint = Paint()
       ..color      = const Color(0xFFCCCFDA)
@@ -1074,12 +1036,11 @@ class _LineaPainter extends CustomPainter {
       dashX += 9;
     }
 
-    // Puntos visibles según progreso de animación
     final showUpTo = ((n - 1) * progress).clamp(0.0, (n - 1).toDouble());
     final fullPts  = showUpTo.floor();
     final frac     = showUpTo - fullPts;
 
-    // Construir path de la línea
+    // Path de la línea
     final path = Path()..moveTo(pts[0].dx, pts[0].dy);
     for (int i = 1; i <= fullPts; i++) {
       final cp = (pts[i - 1].dx + pts[i].dx) / 2;
@@ -1095,11 +1056,12 @@ class _LineaPainter extends CustomPainter {
       path.cubicTo(cp, pts[fullPts].dy, cp, pY, pX, pY);
     }
 
-    // Área de relleno bajo la línea
+    // Relleno degradado
     final lastX = fullPts < n - 1
         ? pts[fullPts].dx +
             (pts[fullPts + 1].dx - pts[fullPts].dx) * frac
         : pts[fullPts].dx;
+
     final fillPath = Path.from(path)
       ..lineTo(lastX, chartH)
       ..lineTo(pts[0].dx, chartH)
@@ -1131,10 +1093,10 @@ class _LineaPainter extends CustomPainter {
 
     // Puntos y etiquetas
     for (int i = 0; i <= fullPts; i++) {
-      final p          = pts[i];
-      final esUltimo   = i == n - 1;
-      final porEncima  = valores[i] >= promedio;
-      final dotColor   = porEncima ? _green : _orange;
+      final p         = pts[i];
+      final esUltimo  = i == n - 1;
+      final porEncima = valores[i] >= promedio;
+      final dotColor  = porEncima ? _green : _orange;
 
       if (esUltimo) {
         canvas.drawCircle(
@@ -1145,33 +1107,28 @@ class _LineaPainter extends CustomPainter {
       canvas.drawCircle(
           p, esUltimo ? 4.0 : 2.5, Paint()..color = dotColor);
 
-      _drawText(
-        canvas,
-        text:   puntos[i].label,
-        x:      p.dx,
-        y:      size.height - 14,
-        color:  esUltimo ? accentColor : _textSub,
-        fontSize: 9.5,
-        bold:   esUltimo,
-      );
+      _drawText(canvas,
+          text:     puntos[i].label,
+          x:        p.dx,
+          y:        size.height - 14,
+          color:    esUltimo ? accentColor : _textSub,
+          fontSize: 9.5,
+          bold:     esUltimo);
 
       if (esUltimo) {
-        _drawText(
-          canvas,
-          text:     "${valores[i].toStringAsFixed(1)} km/L",
-          x:        p.dx,
-          y:        p.dy - 20,
-          color:    accentColor,
-          fontSize: 11,
-          bold:     true,
-          withBg:   true,
-        );
+        _drawText(canvas,
+            text:     "${valores[i].toStringAsFixed(1)} km/L",
+            x:        p.dx,
+            y:        p.dy - 20,
+            color:    accentColor,
+            fontSize: 11,
+            bold:     true,
+            withBg:   true);
       }
     }
   }
 
-  void _drawText(
-    Canvas canvas, {
+  void _drawText(Canvas canvas, {
     required String text,
     required double x,
     required double y,
@@ -1198,8 +1155,7 @@ class _LineaPainter extends CustomPainter {
     if (withBg) {
       canvas.drawRRect(
         RRect.fromRectAndRadius(
-          Rect.fromLTWH(
-              dx - 6, dy - 3, tp.width + 12, tp.height + 6),
+          Rect.fromLTWH(dx - 6, dy - 3, tp.width + 12, tp.height + 6),
           const Radius.circular(8),
         ),
         Paint()..color = color.withOpacity(0.10),
