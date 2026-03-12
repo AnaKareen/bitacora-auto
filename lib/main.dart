@@ -1,8 +1,21 @@
 import 'package:flutter/material.dart';
 import 'dashboard.dart';
+import 'splash_screen.dart';
 
 void main() {
-  runApp(const ControlVehicularApp());
+  runApp(const MyApp());
+}
+
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Mi Sentra',
+      debugShowCheckedModeBanner: false,
+      home: const SplashScreen(), // ← antes decía Dashboard()
+    );
+  }
 }
 
 class ControlVehicularApp extends StatelessWidget {
